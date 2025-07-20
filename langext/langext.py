@@ -3417,6 +3417,9 @@ def get_names_by_extension(data, target_ext):
    Returns:
       list: List of matching language names.
    """
+   if "." not in target_ext:
+      print("Prefix the extension with a dot")
+      sys.exit(1)
    target_ext = target_ext.lower()
    names = []
    for entry in data:
