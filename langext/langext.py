@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import argparse
+import argcomplete
 
 # source of this language extension mapping: https://gist.githubusercontent.com/aymen-mouelhi/82c93fbcd25f091f2c13faa5e0d61760/raw/465a579aec8d3c04a8d201f9364b1feafd509d31/languages.json
 language_ext = [
@@ -3403,6 +3404,8 @@ if __name__ == "__main__":
       type=str,
       help="List extensions for a particular data, markup, programming, or prose. Example: --extensions python"
     )
+
+   argcomplete.autocomplete(parser)  # Enables tab completion
 
    args = parser.parse_args()
 
