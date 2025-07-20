@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 import argparse
 import argcomplete
+import sys
 
 # source of this language extension mapping: https://gist.githubusercontent.com/aymen-mouelhi/82c93fbcd25f091f2c13faa5e0d61760/raw/465a579aec8d3c04a8d201f9364b1feafd509d31/languages.json
-language_ext = [
+language_to_ext = [
    {
       "name":"ABAP",
       "type":"programming",
@@ -3389,6 +3390,42 @@ def get_extensions_by_name(data, target_name):
     return []  # return empty list if not found
 
 
+# def get_name_by_extension(data, target_ext):
+#    """
+#       Returns the name of the language or format associated with a given file extension.
+
+#       Args:
+#          data (list): A list of dictionaries, each containing 'name' and 'extensions' keys.
+#          target_ext (str): The file extension to look up (e.g., '.py', '.ash').
+
+#       Returns:
+#          str or None: The name associated with the extension, or None if not found.
+#     """
+#    target_ext = target_ext.lower()
+#    for entry in data:
+#       if any(ext.lower() == target_ext for ext in entry.get("extensions", [])):
+#          return entry.get("name")
+#    return None
+def get_names_by_extension(data, target_ext):
+   """
+   Returns a list of language names that have the given file extension.
+
+   Args:
+      data (list): List of dictionaries containing language info.
+      target_ext (str): File extension to search for (e.g., '.py').
+
+   Returns:
+      list: List of matching language names.
+   """
+   target_ext = target_ext.lower()
+   names = []
+   for entry in data:
+      if any(ext.lower() == target_ext for ext in entry.get("extensions", [])):
+         names.append(entry.get("name"))
+   return names
+
+
+
 if __name__ == "__main__":
    parser = argparse.ArgumentParser(description="Get extensions of a programming language, data format, markup language, or prose.")
 
@@ -3399,43 +3436,58 @@ if __name__ == "__main__":
       help="List all available categories: data, markup, programming, prose. Use 'all' to list everything. Example: --list-all programming"
     )
    parser.add_argument(
-      "-ext",
+      "-e",
       "--extensions",
       type=str,
       help="List extensions for a particular data, markup, programming, or prose. Example: --extensions python"
     )
+   parser.add_argument(
+      "-le", "--language-from-extension",
+      type=str,
+      help="Get language name from a given file extension (prefix the extension with a dot). Example: --language-from-extension .py"
+   )
+
 
    argcomplete.autocomplete(parser)  # Enables tab completion
+
+   if len(sys.argv) == 1:
+      print("No options passed. Use -h for help.")
+      sys.exit(1)
 
    args = parser.parse_args()
 
    list_all_value = args.list_all
    extensions_value = args.extensions
-
-   if not list_all_value and not extensions_value:
-      print("Please pass an option. Use --list-all or --extensions. Run with -h for help.")
+   language_from_extension_value = args.language_from_extension
 
    if list_all_value:
       list_all_value = list_all_value.lower()
 
       if list_all_value == "all":
-         for lang in language_ext:
+         for lang in language_to_ext:
             if lang.get("type") == "programming":
                print(lang.get("name"))
-         for lang in language_ext:
+         for lang in language_to_ext:
             if lang.get("type") == "markup":
                print(lang.get("name"))
-         for lang in language_ext:
+         for lang in language_to_ext:
             if lang.get("type") == "data":
                print(lang.get("name"))
-         for lang in language_ext:
+         for lang in language_to_ext:
             if lang.get("type") == "prose":
                print(lang.get("name"))
       else:
-         for lang in language_ext:
+         for lang in language_to_ext:
             if lang.get("type") == list_all_value:
                print(lang.get("name"))
 
    if extensions_value:
-      extensions = get_extensions_by_name(language_ext, extensions_value)
+      extensions = get_extensions_by_name(language_to_ext, extensions_value)
       print(" ".join(extensions))
+
+   if language_from_extension_value:
+      found_language = get_names_by_extension(language_to_ext, language_from_extension_value)
+      if found_language:
+         print(", ".join(found_language))
+      else:
+         print("No match found.")
