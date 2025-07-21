@@ -3436,7 +3436,7 @@ if __name__ == "__main__":
       "-l",
       "--list-all",
       type=str,
-      help="List all available categories: data, markup, programming, prose. Use 'all' to list everything. Example: --list-all programming"
+      help="List all from specified category. Available categories: data, markup, programming, prose. Use 'all' to list from all categories. Example: --list-all programming"
     )
    parser.add_argument(
       "-e",
