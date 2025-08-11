@@ -24,6 +24,7 @@ GRAY = "\033[90m"
 GREEN = "\033[32m"
 CYAN = "\033[96m"
 PINK = "\033[95m"
+RED = "\033[91m"
 RESET = "\033[0m"
 
 
@@ -31,6 +32,9 @@ def make_request(url, headers, timeout=10, proxy_url=None, follow_redirects=Fals
     try:
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
         response = requests.get(url, timeout=timeout, proxies=proxies, verify=False, allow_redirects=follow_redirects, headers=headers)
+
+        if response.status_code == 429:
+            print(f"{RED}[~] Response code: {response.status_code}. Probably rate limited.{RESET} For URL: {url}")
         # commented the below line coz Request without raise_for_status to allow 4xx/5xx body inspection to see if modified parameter value is present in response body or not.
         # response.raise_for_status()  # raises error for bad responses (4xx, 5xx).
     # Handles all request failures
