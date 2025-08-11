@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/ishu/dev/scripts/venv_scripts/bin/python3
 
 import requests
 import shutil
@@ -7,6 +7,12 @@ import argcomplete
 import sys
 import concurrent.futures
 import urllib3
+import json
+
+from bs4 import BeautifulSoup
+from pygments import highlight
+from pygments.lexers import HtmlLexer
+from pygments.formatters import TerminalFormatter
 
 # Disable SSL certificate warnings 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -73,9 +79,23 @@ if __name__ == "__main__":
         action="append",
         help="Additional HTTP headers to include in requests, in 'Key: Value' format. Can be used multiple times."
     )
+    parser.add_argument(
+        "-P", "--no-prettify",
+        action="store_false",
+        dest="prettify",
+        default=True,
+        help="Disable pretty-printing and syntax highlighting of HTML response bodies (enabled by default)."
+    )
+    parser.add_argument(
+        "-o",
+        "--json-output",
+        metavar="FILE",
+        help="Write the output as JSON to the specified file instead of printing to stdout. Overwrites if the specified file already exists."
+    )
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
+    json_output_value = args.json_output
 
     timeout_value = args.timeout
     threads_value = args.threads
@@ -112,6 +132,8 @@ if __name__ == "__main__":
     # for url in urls_value:
     #     make_request(url=url, headers=headers, timeout=timeout_value, proxy_url=proxy_value, follow_redirects=follow_redirects_value)
 
+    results = []
+
     MAX_PARALLEL = threads_value
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:
@@ -126,15 +148,50 @@ if __name__ == "__main__":
             )
             for url in urls_value
         ]
-        for future in concurrent.futures.as_completed(futures):
-            response = future.result()
-            if response is not None:
-                print(f"\n{CYAN}URL:{RESET} {response.url}")
-                print(f"{GREEN}Status:{RESET} {response.status_code}")
-                print(f"{YELLOW}Headers:{RESET}")
-                for k, v in response.headers.items():
-                    print(f"  {k}: {v}")
-                print(f"{PINK}\nBody:\n{RESET}{response.text}")
-                print(f"{'─' * terminal_width}")
+    for future in concurrent.futures.as_completed(futures):
+        response = future.result()
+        if response is not None:
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            body = response.text  # Use response.text directly for decoded content
+
+            # Prettify HTML for structure
+            soup = BeautifulSoup(body, "html.parser")
+            pretty_html = soup.prettify()
+
+            data = {
+                "url": response.url,
+                "status_code": response.status_code,
+                "headers": dict(response.headers),
+                "title": soup.title.string.strip() if soup.title else None,
+                "body": body
+            }
+
+            if json_output_value:
+                results.append(data)
             else:
-                print(f"{YELLOW}[!] No response received.{RESET}")
+                print(f"\n{CYAN}URL:{RESET} {response.url}\n")
+                print(f"{GREEN}Status:{RESET} {response.status_code}\n")
+                if soup.title:
+                    print(f"{GRAY}Title:{RESET} {soup.title.string.strip()}\n")
+                else:
+                    print("Title: None\n")
+                print(f"{YELLOW}Headers:{RESET}\n")
+                for k, v in response.headers.items():
+                    print(f"  {GRAY}{k}:{RESET} {v}")
+
+                print(f"\n{PINK}Response Body:{RESET}\n")
+                if args.prettify and body and "html" in content_type:
+                    highlighted_response_body = highlight(pretty_html, HtmlLexer(), TerminalFormatter())
+                    print(highlighted_response_body)
+                elif body:
+                    print(body)
+                else:
+                    print(response.text)  # fallback
+                print(f"{GRAY}{'─' * terminal_width}{RESET}")
+        else:
+            print(f"{YELLOW}[!] No response received.{RESET}")
+    
+    if json_output_value:
+        with open(json_output_value, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
