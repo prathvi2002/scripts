@@ -1,0 +1,140 @@
+#!/usr/bin/python3
+
+import requests
+import shutil
+import argparse
+import argcomplete
+import sys
+import concurrent.futures
+import urllib3
+
+# Disable SSL certificate warnings 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+terminal_width = shutil.get_terminal_size().columns
+
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+GREEN = "\033[32m"
+CYAN = "\033[96m"
+PINK = "\033[95m"
+RESET = "\033[0m"
+
+
+def make_request(url, headers, timeout=10, proxy_url=None, follow_redirects=False):
+    try:
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        response = requests.get(url, timeout=timeout, proxies=proxies, verify=False, allow_redirects=follow_redirects, headers=headers)
+        # commented the below line coz Request without raise_for_status to allow 4xx/5xx body inspection to see if modified parameter value is present in response body or not.
+        # response.raise_for_status()  # raises error for bad responses (4xx, 5xx).
+    # Handles all request failures
+    except Exception as e:
+        print(f"{YELLOW}[!] Request failed for {url}: {e}{RESET}")
+        response = None
+
+    return response
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="A simple script to make HTTP GET request to proivded URLs and prints the response.", formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "urls",
+        nargs="*",
+        help="One or more target URLs to test. Provide as CLI positional arguments or via piped stdin. Example: hsqli http://example.com?id=1 OR echo \"http://example.com?id=1\" | hsqli"
+    )
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        type=int,
+        default=10,
+        help="Maximum seconds to wait for a response (default 10). Example: --timeout 10"
+    )
+    parser.add_argument(
+        "-T",
+        "--threads",
+        type=int,
+        default=10,
+        help="Number of concurrent worker threads to use (default: 1). Example: --threads 20"
+    )
+    parser.add_argument(
+        "-p",
+        "--proxy",
+        default=None,
+        help="Optional proxy URL to route requests through. Example: --proxy http://127.0.0.1:9090"
+    )
+    parser.add_argument(
+        "-f",
+        "--follow-redirects",
+        action="store_true",
+        help="Follow redirects (default: False). Example: --follow-redirects"
+    )
+    parser.add_argument(
+        "-H", "--header",
+        action="append",
+        help="Additional HTTP headers to include in requests, in 'Key: Value' format. Can be used multiple times."
+    )
+
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+
+    timeout_value = args.timeout
+    threads_value = args.threads
+    proxy_value = args.proxy
+    follow_redirects_value = args.follow_redirects
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        "Accept": "*/*",
+        "Accept-Language": "en;q=0.5, *;q=0.1",
+        "Accept-Encoding": "gzip, deflate, br"
+    }
+
+    if args.header:
+        for h in args.header:
+            if ":" not in h:
+                parser.error(f"Invalid header format: {h}. Use 'Key: Value'")
+            key, value = h.split(":", 1)
+            headers[key.strip()] = value.strip()
+
+    ## Collect URLs from CLI and from stdin if piped
+    # Start with any URLs provided as positional arguments from CLI
+    urls_value = list(args.urls)
+    # If stdin is not a TTY, it means data was piped in
+    if not sys.stdin.isatty():
+        for line in sys.stdin:
+            line = line.strip()
+            if line:
+                urls_value.append(line)
+
+    if not urls_value:
+        parser.error("No URLs provided (via args or piped input).")
+
+    # for url in urls_value:
+    #     make_request(url=url, headers=headers, timeout=timeout_value, proxy_url=proxy_value, follow_redirects=follow_redirects_value)
+
+    MAX_PARALLEL = threads_value
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:
+        futures = [
+            executor.submit(
+                make_request,
+                url,
+                headers,
+                args.timeout,
+                args.proxy,
+                args.follow_redirects
+            )
+            for url in urls_value
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            response = future.result()
+            if response is not None:
+                print(f"\n{CYAN}URL:{RESET} {response.url}")
+                print(f"{GREEN}Status:{RESET} {response.status_code}")
+                print(f"{YELLOW}Headers:{RESET}")
+                for k, v in response.headers.items():
+                    print(f"  {k}: {v}")
+                print(f"{PINK}\nBody:\n{RESET}{response.text}")
+                print(f"{'─' * terminal_width}")
+            else:
+                print(f"{YELLOW}[!] No response received.{RESET}")
