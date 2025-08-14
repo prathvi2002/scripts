@@ -155,19 +155,23 @@ if __name__ == "__main__":
     for future in concurrent.futures.as_completed(futures):
         response = future.result()
         if response is not None:
+            body = response.text  # Use response.text directly for decoded content
             content_type = response.headers.get("Content-Type", "").lower()
 
-            body = response.text  # Use response.text directly for decoded content
-
-            # Prettify HTML for structure
-            soup = BeautifulSoup(body, "html.parser")
-            pretty_html = soup.prettify()
+            if "html" in content_type:
+                # Prettify HTML for structure
+                soup = BeautifulSoup(body, "html.parser")
+                pretty_html = soup.prettify()
+            else:
+                soup = None
+                pretty_html = body  # keep as is
 
             data = {
                 "url": response.url,
                 "status_code": response.status_code,
                 "headers": dict(response.headers),
-                "title": soup.title.string.strip() if soup.title else None,
+                # "title": soup.title.string.strip() if soup.title else None,
+                "title": soup.title.string.strip() if soup and soup.title else None,
                 "body": body
             }
 
@@ -176,7 +180,7 @@ if __name__ == "__main__":
             else:
                 print(f"\n{CYAN}URL:{RESET} {response.url}\n")
                 print(f"{GREEN}Status:{RESET} {response.status_code}\n")
-                if soup.title:
+                if soup and soup.title:
                     print(f"{GRAY}Title:{RESET} {soup.title.string.strip()}\n")
                 else:
                     print("Title: None\n")
@@ -185,7 +189,8 @@ if __name__ == "__main__":
                     print(f"  {GRAY}{k}:{RESET} {v}")
 
                 print(f"\n{PINK}Response Body:{RESET}\n")
-                if args.prettify and body and "html" in content_type:
+                # if args.prettify and body and "html" in content_type:
+                if args.prettify and soup:
                     highlighted_response_body = highlight(pretty_html, HtmlLexer(), TerminalFormatter())
                     print(highlighted_response_body)
                 elif body:
