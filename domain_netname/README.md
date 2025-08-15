@@ -10,11 +10,15 @@
 - Outputs results in a clean, space-separated format:  
 
 ## Usage
+Run `./domain_netname.sh --help` to see all available options.
 
 ```bash
 cat domains.txt | ./domain_netname.sh
 ```
 
+## Usage Tips
+- Run the script with a maximum concurrency of 10 to reduce `No NetName found` errors.
+- By default, `No NetName found` and `whois failed for` errors are printed in red to make them stand out. Use the `--nocolour` flag to disable colored output and print errors in normal text.
 
 ## Clever Usage
 - You can filter the script output to show only entries for a specific target NetName using `grep`. Example:
