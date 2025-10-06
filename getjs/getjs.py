@@ -7,12 +7,16 @@ import requests
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0"
+}
+
 def download_js(url):
     url = url.strip()
     if not url:
         return None
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, headers=HEADERS, timeout=15)
         response.raise_for_status()
         filename = os.path.basename(urlparse(url).path)
         with open(filename, "wb") as f:
