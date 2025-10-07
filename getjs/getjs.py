@@ -6,10 +6,19 @@ import argparse
 import requests
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0"
 }
+
+def safe_filename_from_url(url):
+    parsed = urlparse(url)
+    filename = os.path.basename(parsed.path)
+    if not filename:
+        # fallback: use hash of URL
+        filename = hashlib.md5(url.encode()).hexdigest() + ".js"
+    return filename
 
 def download_js(url):
     url = url.strip()
@@ -18,7 +27,7 @@ def download_js(url):
     try:
         response = requests.get(url, headers=HEADERS, timeout=15)
         response.raise_for_status()
-        filename = os.path.basename(urlparse(url).path)
+        filename = safe_filename_from_url(url)
         with open(filename, "wb") as f:
             f.write(response.content)
         return f"[+] Saved: {filename}"
