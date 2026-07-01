@@ -1,0 +1,37 @@
+usage: api_path_permutator.py [-h] -i INPUT [-o OUTPUT] [-d DEPTH] [-p PREFIX] [-e EXTENSION [EXTENSION ...]]
+
+Generate sequential URL/API directory permutations with optional prefixes and extensions.
+
+options:
+  -h, --help            show this help message and exit
+  -i, --input INPUT     Path to the input single-word text file
+  -o, --output OUTPUT   Path to save the generated permuted wordlist (Prints to screen if omitted)
+  -d, --depth DEPTH     Maximum directory/folder depth (default: 3)
+  -p, --prefix PREFIX   An optional locked prefix path (e.g., 'api/v1') forced at the beginning of every path
+  -e, --extension EXTENSION [EXTENSION ...]
+                        Optional extension(s) to append to paths (e.g., -e json xml bak)
+[fedora@fedora-blue-marmot-41 trash]$ api_path_permutator.py -i one_word_list.txt -d 4 -p api/Users/
+[+] Loaded 4 unique base words from 'one_word_list.txt'.
+[+] Using locked prefix: 'api/Users/'
+[+] Generating structural directory permutations up to depth 4...
+api/Users/Users
+api/Users/api
+api/Users/james_bernard_2496
+api/Users/username
+  -> Generated 4 variations at depth 1
+api/Users/Users/api
+api/Users/Users/james_bernard_2496
+api/Users/Users/username
+api/Users/api/Users
+api/Users/api/james_bernard_2496
+api/Users/api/username
+api/Users/james_bernard_2496/Users
+api/Users/james_bernard_2496/api
+api/Users/james_bernard_2496/username
+api/Users/username/Users
+api/Users/username/api
+api/Users/username/james_bernard_2496
+
+
+
+i think if in prefix the api and Users word is used then it should not be used in the remanining path in the genreated wordlist... (dont ignore the case sensitivity... if api/Users is provided as prefix then if "users" is present in input wordlist then the remaining path should contain "users" as the prefix had capital "Users" not "users")
