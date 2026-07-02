@@ -1,5 +1,7 @@
 # API Path Permutator
 
+best use case would be to know an interesting prefix path and permute the suffix it with a small depth using a wordlist which contains target specific path words.
+
 A Python CLI tool designed to build structural, permutated directory paths from a list of single base words. 
 
 ### Why this tool?
