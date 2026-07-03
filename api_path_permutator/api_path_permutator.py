@@ -187,13 +187,32 @@ def generate_api_paths(input_files, output_file, max_depth, prefix, suffix,
         clean_suffix = "/" + suffix.strip("/")
         locked_segments |= set(seg for seg in suffix.strip("/").split("/") if seg)
 
+    repeats_active = allow_repeats or bool(repeat_set)
+
     if locked_segments:
-        excluded = [w for w in words if w in locked_segments]
+        # Words that are allowed to repeat should stay in the pool even if
+        # they're also used in the prefix/suffix, so they can still show up
+        # again in the permuted body. Only non-repeatable locked words get
+        # removed from the pool entirely.
+        if allow_repeats:
+            protected = locked_segments  # everything is repeat-eligible
+        elif repeat_set:
+            protected = locked_segments & repeat_set
+        else:
+            protected = set()
+
+        to_exclude = locked_segments - protected
+        excluded = [w for w in words if w in to_exclude]
         if excluded:
-            words = [w for w in words if w not in locked_segments]
-            print(f"[+] Excluding {len(excluded)} word(s) already in prefix/suffix "
+            words = [w for w in words if w not in to_exclude]
+            print(f"[+] Excluding {len(excluded)} non-repeatable word(s) already in prefix/suffix "
                   f"(case-sensitive): {excluded}", file=sys.stderr)
             print(f"[+] {len(words)} word(s) remain for permutation after exclusion.", file=sys.stderr)
+
+        kept = sorted(w for w in words if w in locked_segments)
+        if kept:
+            print(f"[+] Keeping {kept} in the pool despite being used in the prefix/suffix, "
+                  f"since they're allowed to repeat.", file=sys.stderr)
 
     if clean_prefix:
         print(f"[+] Using locked prefix: '{clean_prefix}'", file=sys.stderr)
@@ -203,7 +222,6 @@ def generate_api_paths(input_files, output_file, max_depth, prefix, suffix,
         print(f"[+] Appending extensions: {extensions}", file=sys.stderr)
 
     # Repeat mode + cap
-    repeats_active = allow_repeats or bool(repeat_set)
     repeatable_set = set(words) if allow_repeats else (repeat_set if repeat_set else set())
     if allow_repeats:
         print(f"[+] Repeats allowed: words may appear more than once per path.", file=sys.stderr)
