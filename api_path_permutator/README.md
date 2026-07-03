@@ -21,7 +21,7 @@ The best use case is: you already know an interesting prefix path, and you permu
 * **Word Sanitization**: Words containing `/`, `\`, or non-printable characters are automatically dropped and reported, so they can't corrupt path structure.
 * **Exclude List**: Skip exact, case-sensitive lines you've already covered or don't want, via `--exclude-file`.
 * **Dry-Run / Stats Mode**: See exact per-depth and total counts without generating or writing a single line.
-* **Random Sampling**: Pull a random subset of N unique valid paths instead of the full combinatorial space — useful when the full space is too large to enumerate.
+* **Random Sampling**: Pull a random subset of N unique valid paths instead of the full combinatorial space , useful when the full space is too large to enumerate.
 * **Pre-Flight Size Warning**: Warns and asks for confirmation before generating very large outputs (over 1,000,000 lines), unless `-y` is passed.
 * **File Extensions**: Automatically appends multiple file formats (like `.json`, `.bak`) to the end of your generated routes.
 * **Flexible Output**: Prints directly to your screen/stdout by default, or writes directly to a file.
@@ -125,7 +125,7 @@ python3 api_path_permutator.py -i common_words.txt target_specific.txt -d 3 -o c
 ```bash
 python3 api_path_permutator.py -i words.txt -d 4 --allow-repeats -o final_list.txt
 ```
-Produces paths like `api/users/settings/users` — a word can appear more than once, but no more than `--max-word-repeat` times (default 2). Raise or lower the cap as needed:
+Produces paths like `api/users/settings/users` , a word can appear more than once, but no more than `--max-word-repeat` times (default 2). Raise or lower the cap as needed:
 ```bash
 python3 api_path_permutator.py -i words.txt -d 5 --allow-repeats --max-word-repeat 3
 ```
@@ -156,7 +156,7 @@ Any output line that exactly matches a line in `already_scanned.txt` (case-sensi
 ```bash
 python3 api_path_permutator.py -i words.txt -d 6 --dry-run
 ```
-Prints the exact per-depth and total line counts without generating or writing anything — useful for tuning `-d`, `--allow-repeats`, or `--max-word-repeat` before running for real.
+Prints the exact per-depth and total line counts without generating or writing anything , useful for tuning `-d`, `--allow-repeats`, or `--max-word-repeat` before running for real.
 
 **11. Sample a random subset instead of the full space**
 ```bash
@@ -175,7 +175,7 @@ By default, any run estimated to produce more than 1,000,000 lines will pause an
 ## Notes on Combinatorics
 
 * Plain permutations (no repeat flags) are capped by word count: you can't generate a depth greater than the number of available words, since each word can only appear once per path. The tool will warn you if `-d` exceeds the word pool size.
-* `--allow-repeats` and `--repeat-words` switch the underlying algorithm from non-repeating permutations to repeat-allowed combinations, which grow much faster (`word_count ^ depth` before capping/filtering) — use `--dry-run` first if you're unsure of the scale.
+* `--allow-repeats` and `--repeat-words` switch the underlying algorithm from non-repeating permutations to repeat-allowed combinations, which grow much faster (`word_count ^ depth` before capping/filtering) , use `--dry-run` first if you're unsure of the scale.
 * Any word already consumed by `-p/--prefix` or `-s/--suffix` (exact case match) is automatically removed from the permutation pool so it isn't redundantly regenerated in the middle of the path.
 
 ---
