@@ -2,13 +2,13 @@
 
 A Python CLI tool designed to build structural, permutated directory paths from one or more lists of single base words.
 
-### Best Use Case
-The best use case is: you already know an interesting prefix path, and you permute everything after it (the suffix) at a small depth, using a wordlist of target-specific path words.
-
 ### Why this tool?
 Kiterunner (`kr scan`) is highly optimized for scanning complex API routes, but it expects complete paths in its `.kite` or text wordlists. It **does not** automatically break lines down, combine them, or create variations.
 
 This tool bridges that gap. It takes single keywords (like `api`, `v1`, `users`), breaks them down, and builds every possible nested folder combination. This allows you to generate exhaustive, target-specific lists to feed directly into Kiterunner for deep API discovery.
+
+### Best Use Case
+The best use case is: you already know an interesting prefix path, and you permute everything after it (the suffix) at a small depth, using a wordlist of target-specific path words.
 
 ---
 
