@@ -1,60 +1,151 @@
 #!/usr/bin/env python3
 
+"""
+Reads a list of URLs from piped standard input
+
+Downloads the HTML source of each URL
+
+Extracts all JavaScript file URLs from <script src="..."> tags
+
+Resolves relative paths to full URLs
+
+Prints the final JS URLs to stdout
+"""
+
 import sys
-import os
 import argparse
 import requests
-from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import hashlib
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0"
-}
 
-def safe_filename_from_url(url):
-    parsed = urlparse(url)
-    filename = os.path.basename(parsed.path)
-    if not filename:
-        # fallback: use hash of URL
-        filename = hashlib.md5(url.encode()).hexdigest() + ".js"
-    return filename
-
-def download_js(url):
-    url = url.strip()
-    if not url:
-        return None
+def extract_js_urls(url, verbose=False):
+    js_urls = []
     try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-        filename = safe_filename_from_url(url)
-        with open(filename, "wb") as f:
-            f.write(response.content)
-        return f"[+] Saved: {filename}"
-    except requests.exceptions.RequestException as e:
-        return f"[-] Failed: {url} ({e})"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        scripts = soup.find_all('script', src=True)
+        for tag in scripts:
+            full_url = urljoin(url, tag['src'])
+            js_urls.append(full_url)
+    except Exception as e:
+        if verbose:
+            print(f"[ERROR] {url} - {e}", file=sys.stderr)
+    return js_urls
 
-def main():
-    parser = argparse.ArgumentParser(description="Download JS files concurrently from stdin URLs.")
-    parser.add_argument("-c", "--concurrent", type=int, default=5, help="Number of concurrent downloads (default: 5)")
-    args = parser.parse_args()
 
-    if sys.stdin.isatty():
-        print("Usage: cat urls.txt | python3 getjs.py [-c 10]")
-        sys.exit(1)
+def is_javascript_content_type(url, verbose=False):
+    """
+    Checks the Content-Type header of a URL (unmodified, as-is).
+    Returns the url itself if the header partially contains 'javascript'
+    (case-insensitive), otherwise returns None.
 
-    urls = [line.strip() for line in sys.stdin if line.strip()]
-    if not urls:
-        print("[-] No URLs provided.")
-        sys.exit(1)
+    If no Content-Type header is present at all (even after falling back
+    to a GET request), the url is still returned, since we can't rule it
+    out as JavaScript. When verbose mode is on, a message is printed
+    noting that the header was missing and that's why the url is being
+    extracted/output.
+    """
+    try:
+        # Try a HEAD request first (cheaper), fall back to GET if HEAD
+        # doesn't give us a usable Content-Type or isn't supported.
+        resp = requests.head(url, timeout=10, allow_redirects=True)
+        content_type = resp.headers.get('Content-Type', '')
 
-    with ThreadPoolExecutor(max_workers=args.concurrent) as executor:
-        future_to_url = {executor.submit(download_js, url): url for url in urls}
-        for future in as_completed(future_to_url):
-            result = future.result()
+        if not content_type:
+            resp = requests.get(url, timeout=10, stream=True)
+            content_type = resp.headers.get('Content-Type', '')
+            resp.close()
+
+        if 'javascript' in content_type.lower():
+            return url
+
+        if not content_type:
+            if verbose:
+                print(
+                    f"[INFO] {url} - no Content-Type header was present, "
+                    f"so extracting/outputting this url anyway",
+                    file=sys.stderr
+                )
+            return url
+    except Exception as e:
+        if verbose:
+            print(f"[ERROR] {url} - {e}", file=sys.stderr)
+    return None
+
+
+def run_extract_mode(urls, concurrent, verbose):
+    worker = partial(extract_js_urls, verbose=verbose)
+    if concurrent and concurrent > 1:
+        with ThreadPoolExecutor(max_workers=concurrent) as executor:
+            for js_files in executor.map(worker, urls):
+                for js in js_files:
+                    print(js)
+                    print("")
+    else:
+        for url in urls:
+            js_files = worker(url)
+            for js in js_files:
+                print(js)
+                print("")
+
+
+def run_content_type_mode(urls, concurrent, verbose):
+    worker = partial(is_javascript_content_type, verbose=verbose)
+    if concurrent and concurrent > 1:
+        with ThreadPoolExecutor(max_workers=concurrent) as executor:
+            for result in executor.map(worker, urls):
+                if result:
+                    print(result)
+    else:
+        for url in urls:
+            result = worker(url)
             if result:
                 print(result)
 
-if __name__ == "__main__":
-    main()
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Reads URLs from stdin. Default mode: downloads HTML "
+                     "and extracts JS file URLs from <script src=...> tags."
+    )
+    parser.add_argument(
+        "-t", "--check-content-type",
+        action="store_true",
+        help="Instead of extracting <script src> tags, request each URL "
+             "from stdin directly and print it unchanged if its "
+             "Content-Type header partially contains 'javascript' (or if "
+             "no Content-Type header is present at all)."
+    )
+    parser.add_argument(
+        "-c", "--concurrent",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of concurrent worker threads to use (default: 1, "
+             "i.e. sequential). Works with both the default mode and "
+             "--check-content-type."
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Print errors and extra info (e.g. requests that fail, or "
+             "urls output because no Content-Type header was present) to "
+             "stderr. Silent by default."
+    )
+    args = parser.parse_args()
+
+    urls = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        urls.append(line)
+
+    if args.check_content_type:
+        run_content_type_mode(urls, args.concurrent, args.verbose)
+    else:
+        run_extract_mode(urls, args.concurrent, args.verbose)
