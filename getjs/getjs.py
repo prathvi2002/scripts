@@ -24,7 +24,7 @@ from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 
 
-def is_javascript_content_type(url, verbose=False):
+def is_javascript_content_type(url, verbose=False, proxies=None, verify=True):
     """
     Checks the Content-Type header of a URL (unmodified, as-is).
     Returns the url itself if the header partially contains 'javascript'
@@ -39,11 +39,17 @@ def is_javascript_content_type(url, verbose=False):
     try:
         # Try a HEAD request first (cheaper), fall back to GET if HEAD
         # doesn't give us a usable Content-Type or isn't supported.
-        resp = requests.head(url, timeout=10, allow_redirects=True)
+        resp = requests.head(
+            url, timeout=10, allow_redirects=True,
+            proxies=proxies, verify=verify
+        )
         content_type = resp.headers.get('Content-Type', '')
 
         if not content_type:
-            resp = requests.get(url, timeout=10, stream=True)
+            resp = requests.get(
+                url, timeout=10, stream=True,
+                proxies=proxies, verify=verify
+            )
             content_type = resp.headers.get('Content-Type', '')
             resp.close()
 
@@ -126,14 +132,17 @@ def filename_from_url(url):
     return name if name else "download.js"
 
 
-def download_js_file(url, verbose=False, outdir="."):
+def download_js_file(url, verbose=False, outdir=".", proxies=None, verify=True):
     """
     Downloads the given url and saves it to outdir using its original
     filename (derived from the url path). Returns the saved file path
     on success, or None on failure.
     """
     try:
-        resp = requests.get(url, timeout=10, stream=True)
+        resp = requests.get(
+            url, timeout=10, stream=True,
+            proxies=proxies, verify=verify
+        )
         resp.raise_for_status()
         filename = filename_from_url(url)
         filepath = os.path.join(outdir, filename)
@@ -148,23 +157,26 @@ def download_js_file(url, verbose=False, outdir="."):
     return None
 
 
-def check_and_download(url, verbose=False, outdir="."):
+def check_and_download(url, verbose=False, outdir=".", proxies=None, verify=True):
     """
     Checks the url's Content-Type the same way -t does (javascript, or
     missing header, both pass; anything else is skipped) and only
     downloads/saves it if it passes.
     """
-    target_url = is_javascript_content_type(url, verbose)
+    target_url = is_javascript_content_type(url, verbose, proxies, verify)
     if not target_url:
         return None
-    return download_js_file(target_url, verbose, outdir)
+    return download_js_file(target_url, verbose, outdir, proxies, verify)
 
 
-def run_download_mode(urls, concurrent, verbose, outdir):
+def run_download_mode(urls, concurrent, verbose, outdir, proxies=None, verify=True):
     if outdir != "." and not os.path.isdir(outdir):
         os.makedirs(outdir, exist_ok=True)
 
-    worker = partial(check_and_download, verbose=verbose, outdir=outdir)
+    worker = partial(
+        check_and_download, verbose=verbose, outdir=outdir,
+        proxies=proxies, verify=verify
+    )
     if concurrent and concurrent > 1:
         with ThreadPoolExecutor(max_workers=concurrent) as executor:
             for filepath in executor.map(worker, urls):
@@ -177,8 +189,11 @@ def run_download_mode(urls, concurrent, verbose, outdir):
                 print(filepath)
 
 
-def run_content_type_mode(urls, concurrent, verbose):
-    worker = partial(is_javascript_content_type, verbose=verbose)
+def run_content_type_mode(urls, concurrent, verbose, proxies=None, verify=True):
+    worker = partial(
+        is_javascript_content_type, verbose=verbose,
+        proxies=proxies, verify=verify
+    )
     if concurrent and concurrent > 1:
         with ThreadPoolExecutor(max_workers=concurrent) as executor:
             for result in executor.map(worker, urls):
@@ -241,7 +256,39 @@ if __name__ == "__main__":
              "urls output because no Content-Type header was present) to "
              "stderr. Silent by default."
     )
+    parser.add_argument(
+        "-p", "--proxy",
+        default=None,
+        metavar="URL",
+        help="HTTP/HTTPS proxy URL to route requests through (e.g. "
+             "http://127.0.0.1:8080). Certificate verification is skipped, "
+             "so intercepting proxies like Burp work out of the box."
+    )
+    parser.add_argument(
+        "--tor",
+        action="store_true",
+        help="Route requests through the local Tor SOCKS5 proxy at "
+             "127.0.0.1:9050. Takes priority over -p/--proxy if both are "
+             "set (a notice is printed to stderr if both are set)."
+    )
     args = parser.parse_args()
+
+    proxies = None
+    verify = True
+    if args.tor and args.proxy:
+        print(
+            "[NOTICE] both --tor and -p/--proxy were set; --tor takes "
+            "priority, -p/--proxy will be ignored",
+            file=sys.stderr
+        )
+    if args.tor:
+        proxies = {
+            "http": "socks5h://127.0.0.1:9050",
+            "https": "socks5h://127.0.0.1:9050",
+        }
+    elif args.proxy:
+        proxies = {"http": args.proxy, "https": args.proxy}
+        verify = False
 
     urls = []
     for line in sys.stdin:
@@ -255,6 +302,9 @@ if __name__ == "__main__":
         urls = [url for url in urls if is_in_scope(url, scope_entries)]
 
     if args.check_content_type:
-        run_content_type_mode(urls, args.concurrent, args.verbose)
+        run_content_type_mode(urls, args.concurrent, args.verbose, proxies, verify)
     else:
-        run_download_mode(urls, args.concurrent, args.verbose, args.output_dir)
+        run_download_mode(
+            urls, args.concurrent, args.verbose, args.output_dir,
+            proxies, verify
+        )
