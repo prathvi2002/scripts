@@ -9,6 +9,10 @@ disk using their original filename.
 
 With -t/--check-content-type: instead of downloading and saving,
 just prints the url unchanged if it passes that same check.
+
+With -s/--scope: restricts which urls are extracted/output to those
+whose host matches one or more given scope entries (see --help for
+the entry shapes supported).
 """
 
 import os
@@ -65,6 +69,50 @@ def is_javascript_content_type(url, verbose=False):
         if verbose:
             print(f"[ERROR] {url} - {e}", file=sys.stderr)
     return None
+
+
+def is_in_scope(url, scope_entries):
+    """
+    Checks whether a url's host matches any of the given scope entries.
+    Entry shape is auto-detected:
+      - "*.example.com" - matches that host itself, or any subdomain of it.
+      - "example.com" (contains a dot, no leading "*.") - matches that exact
+        host only.
+      - "google" (no dot) - substring match anywhere in the host (domain or
+        subdomain), partial matches included.
+    Returns True if the url's host matches any entry, False otherwise
+    (including if the url has no host at all).
+    """
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    host = host.lower()
+
+    for entry in scope_entries:
+        entry = entry.lower()
+        if entry.startswith("*."):
+            suffix = entry[2:]
+            if host == suffix or host.endswith("." + suffix):
+                return True
+        elif "." in entry:
+            if host == entry:
+                return True
+        else:
+            if entry in host:
+                return True
+    return False
+
+
+def parse_scope_entries(raw_scope):
+    """
+    Flattens a list of --scope values (each of which may itself be
+    comma-separated) into a single list of individual scope entries,
+    with whitespace stripped and empty entries dropped.
+    """
+    entries = []
+    for raw in raw_scope:
+        entries.extend(part.strip() for part in raw.split(",") if part.strip())
+    return entries
 
 
 def filename_from_url(url):
@@ -174,6 +222,19 @@ if __name__ == "__main__":
              "default (download) mode."
     )
     parser.add_argument(
+        "-s", "--scope",
+        action="append",
+        default=None,
+        metavar="ENTRY",
+        help="Restrict which urls are extracted/output to those matching the "
+             "given scope entries. Can be repeated and/or comma-separated "
+             "within a single value. Entry shape is auto-detected: "
+             "'example.com' matches that exact host only; '*.example.com' "
+             "matches that host plus any subdomain of it; 'google' (no dot) "
+             "matches any host containing 'google' anywhere, in either the "
+             "domain or subdomain part (partial matches included)."
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Print errors and extra info (e.g. requests that fail, or "
@@ -188,6 +249,10 @@ if __name__ == "__main__":
         if not line:
             continue
         urls.append(line)
+
+    if args.scope:
+        scope_entries = parse_scope_entries(args.scope)
+        urls = [url for url in urls if is_in_scope(url, scope_entries)]
 
     if args.check_content_type:
         run_content_type_mode(urls, args.concurrent, args.verbose)
